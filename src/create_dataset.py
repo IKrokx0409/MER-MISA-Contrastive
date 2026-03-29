@@ -71,7 +71,8 @@ class MOSI:
             self.train = load_pickle(DATA_PATH + '/train.pkl')
             self.dev = load_pickle(DATA_PATH + '/dev.pkl')
             self.test = load_pickle(DATA_PATH + '/test.pkl')
-            self.pretrained_emb, self.word2id = torch.load(CACHE_PATH)
+            self.pretrained_emb, self.word2id = torch.load(CACHE_PATH, weights_only=False)
+            # PyTorch 2.6
 
         except:
 
