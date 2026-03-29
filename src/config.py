@@ -9,7 +9,7 @@ from torch import optim
 import torch.nn as nn
 
 # path to a pretrained word embedding file
-word_emb_path = '/kaggle/input/glove.840B.300d.txt/glove.840B.300d.txt'
+word_emb_path = '/kaggle/input/datasets/takuok/glove840b300dtxt/glove.840B.300d.txt'
 assert(word_emb_path is not None)
 
 
@@ -17,7 +17,7 @@ username = Path.home().name
 project_dir = Path(__file__).resolve().parent.parent
 sdk_dir = project_dir.joinpath('CMU-MultimodalSDK')
 
-data_dir = Path('/kaggle/input/mosi-dataset')
+data_dir = Path('/kaggle/input/datasets/ikrokx0409/mosi-dataset')
 
 data_dict = {
     'mosi': data_dir.joinpath('MOSI'), 
