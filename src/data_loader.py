@@ -117,9 +117,19 @@ def get_loader(config, shuffle=True):
         intent_labels = torch.zeros(len(batch), config.num_classes_intent)
         ids = []
 
+        def clean_feat(feat):
+            feat = np.nan_to_num(feat) # 把潜在的 nan 变成 0
+            # 压制方差，防止 LSTM 梯度爆炸
+            feat = (feat - np.mean(feat, axis=0, keepdims=True)) / (np.std(feat, axis=0, keepdims=True) + 1e-6)
+            return feat
+
         for b_idx, sample in enumerate(batch):
             feats, emo, intent, item_id = sample
             t, v, a, img, mask = feats
+            t = clean_feat(t)
+            v = clean_feat(v)
+            a = clean_feat(a)
+            img = clean_feat(img)
             
             # Text, Video, Image 升维变序列
             t_batch.append(torch.FloatTensor(t.copy()).unsqueeze(0)) 
