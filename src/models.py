@@ -31,11 +31,17 @@ class MISA(nn.Module):
         super(MISA, self).__init__()
 
         self.config = config
-        self.text_size = config.embedding_size
+        if self.config.data == "mine":
+            self.text_size = 768
+        else:
+            self.text_size = config.embedding_size
+            
         self.visual_size = config.visual_size
         self.acoustic_size = config.acoustic_size
 
         self.image_size = config.image_size # MINE added
+
+        
         # 可学习的 Prompt Pool
         self.prompt_t = nn.Parameter(torch.randn(1, config.hidden_size))
         self.prompt_v = nn.Parameter(torch.randn(1, config.hidden_size))
