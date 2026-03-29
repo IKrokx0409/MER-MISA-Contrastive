@@ -54,13 +54,14 @@ class MISA(nn.Module):
         rnn = nn.LSTM if self.config.rnncell == "lstm" else nn.GRU
         # defining modules - two layer bidirectional LSTM with layer norm in between
 
-        if self.config.use_bert:
+        if self.config.use_bert and self.config.data != "mine":
 
             # Initializing a BERT bert-base-uncased style configuration
             bertconfig = BertConfig.from_pretrained('bert-base-uncased', output_hidden_states=True)
             self.bertmodel = BertModel.from_pretrained('bert-base-uncased', config=bertconfig)
         else:
-            self.embed = nn.Embedding(len(config.word2id), input_sizes[0])
+            if self.config.data != "mine":
+                self.embed = nn.Embedding(len(config.word2id), input_sizes[0])
             self.trnn1 = rnn(input_sizes[0], hidden_sizes[0], bidirectional=True)
             self.trnn2 = rnn(2*hidden_sizes[0], hidden_sizes[0], bidirectional=True)
         
@@ -78,7 +79,7 @@ class MISA(nn.Module):
         ##########################################
         # mapping modalities to same sized space
         ##########################################
-        if self.config.use_bert:
+        if self.config.use_bert and self.config.data != "mine":
             self.project_t = nn.Sequential()
             self.project_t.add_module('project_t', nn.Linear(in_features=768, out_features=config.hidden_size))
             self.project_t.add_module('project_t_activation', self.activation)

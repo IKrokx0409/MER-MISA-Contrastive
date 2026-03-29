@@ -122,12 +122,12 @@ def get_loader(config, shuffle=True):
             t, v, a, img, mask = feats
             
             # Text, Video, Image 升维变序列
-            t_batch.append(torch.FloatTensor(t).unsqueeze(0)) 
-            v_batch.append(torch.FloatTensor(v).unsqueeze(0))
-            i_batch.append(torch.FloatTensor(img).unsqueeze(0))
+            t_batch.append(torch.FloatTensor(t.copy()).unsqueeze(0)) 
+            v_batch.append(torch.FloatTensor(v.copy()).unsqueeze(0))
+            i_batch.append(torch.FloatTensor(img.copy()).unsqueeze(0))
             # Audio 直接转 Tensor
-            a_batch.append(torch.FloatTensor(a))
-            mask_batch.append(torch.FloatTensor(mask))
+            a_batch.append(torch.FloatTensor(a.copy()))
+            mask_batch.append(torch.FloatTensor(mask.copy()))
             
             emo_labels.append(emo)
             if len(intent) > 0:
