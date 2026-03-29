@@ -9,7 +9,8 @@ from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_se
 from torch.utils.data import DataLoader, Dataset
 from transformers import *
 
-from create_dataset import MOSI, MOSEI, UR_FUNNY, PAD, UNK
+# add mine
+from create_dataset import MOSI, MOSEI, UR_FUNNY, MINE, PAD, UNK
 
 
 bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -25,6 +26,8 @@ class MSADataset(Dataset):
             dataset = MOSEI(config)
         elif "ur_funny" in str(config.data_dir).lower():
             dataset = UR_FUNNY(config)
+        elif "mine" in str(config.data_dir).lower():
+            dataset = MINE(config)
         else:
             print("Dataset not defined correctly")
             exit()
@@ -32,11 +35,21 @@ class MSADataset(Dataset):
         self.data, self.word2id, self.pretrained_emb = dataset.get_data(config.mode)
         self.len = len(self.data)
 
-        config.visual_size = self.data[0][0][1].shape[1]
-        config.acoustic_size = self.data[0][0][2].shape[1]
+        if "mine" in str(config.data_dir).lower():
+            # MINE: data[0][0] 是 (t, v, a, i, mask)
+            config.text_size = self.data[0][0][0].shape[-1]     # 768
+            config.visual_size = self.data[0][0][1].shape[-1]   # 512
+            config.acoustic_size = self.data[0][0][2].shape[-1] # 768
+            config.image_size = self.data[0][0][3].shape[-1]    # 768
+            config.word2id = None
+            config.pretrained_emb = None
 
-        config.word2id = self.word2id
-        config.pretrained_emb = self.pretrained_emb
+        else:
+            config.visual_size = self.data[0][0][1].shape[1]
+            config.acoustic_size = self.data[0][0][2].shape[1]
+
+            config.word2id = self.word2id
+            config.pretrained_emb = self.pretrained_emb
 
 
     def __getitem__(self, index):
@@ -96,11 +109,47 @@ def get_loader(config, shuffle=True):
 
         return sentences, visual, acoustic, labels, lengths, bert_sentences, bert_sentence_types, bert_sentence_att_mask
 
+    # MINE dataset collate function
+    def collate_fn_mine(batch):
+        t_batch, v_batch, a_batch, i_batch, mask_batch = [], [], [], [], []
+        emo_labels = []
+        # 创建全 0 意图矩阵做 Multi-hot
+        intent_labels = torch.zeros(len(batch), config.num_classes_intent)
+        ids = []
 
+        for b_idx, sample in enumerate(batch):
+            feats, emo, intent, item_id = sample
+            t, v, a, img, mask = feats
+            
+            # Text, Video, Image 升维变序列
+            t_batch.append(torch.FloatTensor(t).unsqueeze(0)) 
+            v_batch.append(torch.FloatTensor(v).unsqueeze(0))
+            i_batch.append(torch.FloatTensor(img).unsqueeze(0))
+            # Audio 直接转 Tensor
+            a_batch.append(torch.FloatTensor(a))
+            mask_batch.append(torch.FloatTensor(mask))
+            
+            emo_labels.append(emo)
+            if len(intent) > 0:
+                intent_labels[b_idx, intent] = 1.0 # Multi-hot 激活
+            ids.append(item_id)
+            
+        t_tensor = pad_sequence(t_batch)
+        v_tensor = pad_sequence(v_batch)
+        i_tensor = pad_sequence(i_batch)
+        a_tensor = pad_sequence(a_batch)
+        
+        emo_tensor = torch.LongTensor(emo_labels)
+        mask_tensor = torch.stack(mask_batch)
+
+        return t_tensor, v_tensor, a_tensor, i_tensor, emo_tensor, intent_labels, mask_tensor, ids
+        
+
+    is_mine = "mine" in str(config.data_dir).lower()
     data_loader = DataLoader(
         dataset=dataset,
         batch_size=config.batch_size,
         shuffle=shuffle,
-        collate_fn=collate_fn)
+        collate_fn=collate_fn_mine if is_mine else collate_fn)
 
     return data_loader

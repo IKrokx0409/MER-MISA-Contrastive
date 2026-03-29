@@ -22,7 +22,8 @@ data_dir = Path('/kaggle/input/datasets/ikrokx0409/mosi-dataset')
 data_dict = {
     'mosi': data_dir.joinpath('MOSI'), 
     'mosei': data_dir.joinpath('MOSEI'), 
-    'ur_funny': data_dir.joinpath('UR_FUNNY')
+    'ur_funny': data_dir.joinpath('UR_FUNNY'),
+    'mine': '/kaggle/input/datasets/ikrokx0409/mine-dataset'
 }
 
 # data_dir = project_dir.joinpath('datasets')
@@ -84,7 +85,7 @@ def get_config(parse=True, **optional_kwargs):
     # Mode
     parser.add_argument('--mode', type=str, default='train')
     parser.add_argument('--runs', type=int, default=5)
-
+    
     # Bert
     parser.add_argument('--use_bert', type=str2bool, default=True)
     parser.add_argument('--use_cmd_sim', type=str2bool, default=True)
@@ -93,6 +94,11 @@ def get_config(parse=True, **optional_kwargs):
     time_now = datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
     parser.add_argument('--name', type=str, default=f"{time_now}")
     parser.add_argument('--num_classes', type=int, default=0)
+
+    # MINE dataset
+    parser.add_argument('--num_classes_emotion', type=int, default=11) 
+    parser.add_argument('--num_classes_intent', type=int, default=21)
+
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--eval_batch_size', type=int, default=10)
     parser.add_argument('--n_epoch', type=int, default=500)
@@ -137,6 +143,10 @@ def get_config(parse=True, **optional_kwargs):
         kwargs.batch_size = 16
     elif kwargs.data == "ur_funny":
         kwargs.num_classes = 2
+        kwargs.batch_size = 32
+    elif kwargs.data == "mine":
+        kwargs.num_classes_emotion = 11  # 情感种类
+        kwargs.num_classes_intent = 21   # 意图种类
         kwargs.batch_size = 32
     else:
         print("No dataset mentioned")

@@ -79,6 +79,9 @@ class Solver(object):
         # self.criterion = criterion = nn.L1Loss(reduction="mean")
         if self.train_config.data == "ur_funny":
             self.criterion = criterion = nn.CrossEntropyLoss(reduction="mean")
+        elif self.train_config.data == "mine":
+            self.criterion_emo = nn.CrossEntropyLoss(reduction="mean")   # 情感：单选分类
+            self.criterion_intent = nn.BCEWithLogitsLoss(reduction="mean") # 意图：多标签分类
         else: # mosi and mosei are regression datasets
             self.criterion = criterion = nn.MSELoss(reduction="mean")
 
@@ -103,24 +106,40 @@ class Solver(object):
             train_loss = []
             for batch in self.train_data_loader:
                 self.model.zero_grad()
-                t, v, a, y, l, bert_sent, bert_sent_type, bert_sent_mask = batch
-
-                batch_size = t.size(0)
-                t = to_gpu(t)
-                v = to_gpu(v)
-                a = to_gpu(a)
-                y = to_gpu(y)
-                l = to_gpu(l)
-                bert_sent = to_gpu(bert_sent)
-                bert_sent_type = to_gpu(bert_sent_type)
-                bert_sent_mask = to_gpu(bert_sent_mask)
-
-                y_tilde = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask)
                 
-                if self.train_config.data == "ur_funny":
-                    y = y.squeeze()
+                if self.train_config.data == "mine":
+                    # MINE 专属解包
+                    t, v, a, i, emo_y, intent_y, mask, _ = batch
+                    t, v, a, i = to_gpu(t), to_gpu(v), to_gpu(a), to_gpu(i)
+                    emo_y, intent_y, mask = to_gpu(emo_y), to_gpu(intent_y), to_gpu(mask)
+                    
+                    emo_tilde, intent_tilde = self.model(t, v, a, i, mask)
+                    
+                    # 计算双重 Loss 并等权相加 (这里可以设超参数调节，暂设 1:1)
+                    emo_loss = self.criterion_emo(emo_tilde, emo_y)
+                    intent_loss = self.criterion_intent(intent_tilde, intent_y)
+                    cls_loss = emo_loss + intent_loss
 
-                cls_loss = criterion(y_tilde, y)
+                else:
+                    t, v, a, y, l, bert_sent, bert_sent_type, bert_sent_mask = batch
+
+                    batch_size = t.size(0)
+                    t = to_gpu(t)
+                    v = to_gpu(v)
+                    a = to_gpu(a)
+                    y = to_gpu(y)
+                    l = to_gpu(l)
+                    bert_sent = to_gpu(bert_sent)
+                    bert_sent_type = to_gpu(bert_sent_type)
+                    bert_sent_mask = to_gpu(bert_sent_mask)
+
+                    y_tilde = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask)
+                    
+                    if self.train_config.data == "ur_funny":
+                        y = y.squeeze()
+
+                    cls_loss = criterion(y_tilde, y)
+
                 diff_loss = self.get_diff_loss()
                 domain_loss = self.get_domain_loss()
                 recon_loss = self.get_recon_loss()
@@ -199,37 +218,64 @@ class Solver(object):
             
 
         with torch.no_grad():
-
+            emo_true, emo_pred, intent_true, intent_pred = [], [], [], []
             for batch in dataloader:
+
                 self.model.zero_grad()
-                t, v, a, y, l, bert_sent, bert_sent_type, bert_sent_mask = batch
 
-                t = to_gpu(t)
-                v = to_gpu(v)
-                a = to_gpu(a)
-                y = to_gpu(y)
-                l = to_gpu(l)
-                bert_sent = to_gpu(bert_sent)
-                bert_sent_type = to_gpu(bert_sent_type)
-                bert_sent_mask = to_gpu(bert_sent_mask)
+                if self.train_config.data == "mine":
+                    t, v, a, i, emo_y, intent_y, mask, _ = batch
+                    t, v, a, i = to_gpu(t), to_gpu(v), to_gpu(a), to_gpu(i)
+                    emo_y, intent_y, mask = to_gpu(emo_y), to_gpu(intent_y), to_gpu(mask)
+                    
+                    emo_tilde, intent_tilde = self.model(t, v, a, i, mask)
+                    loss = self.criterion_emo(emo_tilde, emo_y) + self.criterion_intent(intent_tilde, intent_y)
+                    
+                    emo_pred.append(emo_tilde.detach().cpu().numpy())
+                    emo_true.append(emo_y.detach().cpu().numpy())
+                    intent_pred.append(intent_tilde.detach().cpu().numpy())
+                    intent_true.append(intent_y.detach().cpu().numpy())
 
-                y_tilde = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask)
+                else:
+                    t, v, a, y, l, bert_sent, bert_sent_type, bert_sent_mask = batch
 
-                if self.train_config.data == "ur_funny":
-                    y = y.squeeze()
-                
-                cls_loss = self.criterion(y_tilde, y)
-                loss = cls_loss
+                    t = to_gpu(t)
+                    v = to_gpu(v)
+                    a = to_gpu(a)
+                    y = to_gpu(y)
+                    l = to_gpu(l)
+                    bert_sent = to_gpu(bert_sent)
+                    bert_sent_type = to_gpu(bert_sent_type)
+                    bert_sent_mask = to_gpu(bert_sent_mask)
+
+                    y_tilde = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask)
+
+                    if self.train_config.data == "ur_funny":
+                        y = y.squeeze()
+                    
+                    cls_loss = self.criterion(y_tilde, y)
+                    loss = cls_loss
+
+                    
+                    y_pred.append(y_tilde.detach().cpu().numpy())
+                    y_true.append(y.detach().cpu().numpy())
 
                 eval_loss.append(loss.item())
-                y_pred.append(y_tilde.detach().cpu().numpy())
-                y_true.append(y.detach().cpu().numpy())
 
         eval_loss = np.mean(eval_loss)
-        y_true = np.concatenate(y_true, axis=0).squeeze()
-        y_pred = np.concatenate(y_pred, axis=0).squeeze()
 
-        accuracy = self.calc_metrics(y_true, y_pred, mode, to_print)
+        if self.train_config.data == "mine":
+            emo_true = np.concatenate(emo_true, axis=0).flatten()
+            emo_pred = np.concatenate(emo_pred, axis=0)
+            intent_true = np.concatenate(intent_true, axis=0)
+            intent_pred = np.concatenate(intent_pred, axis=0)
+            accuracy = self.calc_metrics((emo_true, intent_true), (emo_pred, intent_pred), mode, to_print)
+
+        else:
+            y_true = np.concatenate(y_true, axis=0).squeeze()
+            y_pred = np.concatenate(y_pred, axis=0).squeeze()
+
+            accuracy = self.calc_metrics(y_true, y_pred, mode, to_print)
 
         return eval_loss, accuracy
 
@@ -248,8 +294,28 @@ class Solver(object):
         https://github.com/yaohungt/Multimodal-Transformer/blob/master/src/eval_metrics.py
         """
 
+        if self.train_config.data == "mine":
+            emo_true, intent_true = y_true
+            emo_pred, intent_pred = y_pred
+            
+            # 情感：单选分类 (取 logit 最大值的索引)
+            emo_preds_idx = np.argmax(emo_pred, axis=1)
+            emo_acc = accuracy_score(emo_true, emo_preds_idx)
+            
+            # 意图：多标签分类 (经过 Sigmoid 后，> 0.5 即为选中)
+            intent_preds_bin = (expit(intent_pred) > 0.5).astype(int)
+            intent_micro_f1 = f1_score(intent_true, intent_preds_bin, average='micro')
+            intent_macro_f1 = f1_score(intent_true, intent_preds_bin, average='macro')
+            
+            if to_print:
+                print(f"[{mode.upper()}] 📊 MINE 评估结果:")
+                print(f" -> 情感 Accuracy: {emo_acc:.4f}")
+                print(f" -> 意图 Micro-F1: {intent_micro_f1:.4f} | Macro-F1: {intent_macro_f1:.4f}")
+            
+            # 返回一个综合分数供 Early Stopping 使用
+            return (emo_acc + intent_micro_f1) / 2.0
 
-        if self.train_config.data == "ur_funny":
+        elif self.train_config.data == "ur_funny":
             test_preds = np.argmax(y_pred, 1)
             test_truth = y_true
 
@@ -320,8 +386,14 @@ class Solver(object):
         domain_true_a = to_gpu(torch.LongTensor([2]*domain_pred_a.size(0)))
 
         # Stack up predictions and true labels
-        domain_pred = torch.cat((domain_pred_t, domain_pred_v, domain_pred_a), dim=0)
-        domain_true = torch.cat((domain_true_t, domain_true_v, domain_true_a), dim=0)
+        if self.train_config.data == "mine":
+            domain_pred_i = self.model.domain_label_i
+            domain_true_i = to_gpu(torch.LongTensor([3]*domain_pred_i.size(0)))
+            domain_pred = torch.cat((domain_pred_t, domain_pred_v, domain_pred_a, domain_pred_i), dim=0)
+            domain_true = torch.cat((domain_true_t, domain_true_v, domain_true_a, domain_true_i), dim=0)
+        else:
+            domain_pred = torch.cat((domain_pred_t, domain_pred_v, domain_pred_a), dim=0)
+            domain_true = torch.cat((domain_true_t, domain_true_v, domain_true_a), dim=0)
 
         return self.domain_loss_criterion(domain_pred, domain_true)
 
@@ -334,9 +406,13 @@ class Solver(object):
         loss = self.loss_cmd(self.model.utt_shared_t, self.model.utt_shared_v, 5)
         loss += self.loss_cmd(self.model.utt_shared_t, self.model.utt_shared_a, 5)
         loss += self.loss_cmd(self.model.utt_shared_a, self.model.utt_shared_v, 5)
-        loss = loss/3.0
-
-        return loss
+        
+        if self.train_config.data == "mine":
+            loss += self.loss_cmd(self.model.utt_shared_t, self.model.utt_shared_i, 5)
+            loss += self.loss_cmd(self.model.utt_shared_a, self.model.utt_shared_i, 5)
+            loss += self.loss_cmd(self.model.utt_shared_v, self.model.utt_shared_i, 5)
+            return loss / 6.0
+        return loss / 3.0
 
     def get_diff_loss(self):
 
@@ -357,6 +433,11 @@ class Solver(object):
         loss += self.loss_diff(private_a, private_v)
         loss += self.loss_diff(private_t, private_v)
 
+        if self.train_config.data == "mine":
+            shared_i, private_i = self.model.utt_shared_i, self.model.utt_private_i
+            loss += self.loss_diff(private_i, shared_i)
+            loss += self.loss_diff(private_i, private_t) + self.loss_diff(private_i, private_a) + self.loss_diff(private_i, private_v)
+
         return loss
     
     def get_recon_loss(self, ):
@@ -364,8 +445,12 @@ class Solver(object):
         loss = self.loss_recon(self.model.utt_t_recon, self.model.utt_t_orig)
         loss += self.loss_recon(self.model.utt_v_recon, self.model.utt_v_orig)
         loss += self.loss_recon(self.model.utt_a_recon, self.model.utt_a_orig)
-        loss = loss/3.0
-        return loss
+
+        if self.train_config.data == "mine":
+            loss += self.loss_recon(self.model.utt_i_recon, self.model.utt_i_orig)
+            return loss / 4.0
+
+        return loss / 3.0
 
 
 

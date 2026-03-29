@@ -51,7 +51,78 @@ def load_emb(w2i, path_to_embedding, embedding_size=300, embedding_vocab=2196017
     return torch.tensor(emb_mat).float()
 
 
+# MINE dataset
+import json
 
+class MINE:
+    def __init__(self, config):
+        # 1. 指向我们在 config.py 里配置好的 /kaggle/input/mine-dataset
+        self.data_path = Path(config.dataset_dir)
+        print(f"🚀 正在加载 MINE 数据集: {self.data_path}")
+        
+        # 2. 读取三个划分的“名单” (JSON)
+        try:
+            with open(self.data_path / 'train_new_update.json', 'r') as f:
+                self.train_meta = json.load(f)
+            with open(self.data_path / 'dev_new_update.json', 'r') as f:
+                self.dev_meta = json.load(f)
+            with open(self.data_path / 'test_new_update.json', 'r') as f:
+                self.test_meta = json.load(f)
+        except Exception as e:
+            print(f"❌ 读取 JSON 失败，请检查路径: {e}")
+            exit()
+
+        # 3. 内存映射 (mmap) 读取 4 模态特征矩阵，不吃内存！
+        self.text_raw = np.load(self.data_path / 'text_feats_final.npy', mmap_mode='r')
+        self.audio_raw = np.load(self.data_path / 'audio_feats_final.npy', mmap_mode='r')
+        self.video_raw = np.load(self.data_path / 'video_feats_final.npy', mmap_mode='r')
+        self.image_raw = np.load(self.data_path / 'image_feats_final.npy', mmap_mode='r')
+
+        # 4. 组装数据
+        self.train = self._process_data(self.train_meta)
+        self.dev = self._process_data(self.dev_meta)
+        self.test = self._process_data(self.test_meta)
+        
+        # 兼容老代码的返回值，因为我们不需要 word2id 和 pretrained_emb
+        self.word2id = None 
+        self.pretrained_emb = None
+        print(f"✅ MINE 加载完毕！Train: {len(self.train)}, Dev: {len(self.dev)}, Test: {len(self.test)}")
+
+    def _process_data(self, meta_list):
+        processed = []
+        for item in meta_list:
+            # 获取在 .npy 矩阵中的行号
+            idx = int(item['id'])
+            
+            # 提取 4 个模态的特征
+            t = self.text_raw[idx]
+            a = self.audio_raw[idx]
+            v = self.video_raw[idx]
+            i = self.image_raw[idx]
+            
+            # 获取缺失模态的 Mask：[T, A, V, I]
+            mask = item['type'] 
+            
+            # 获取双标签
+            label_emotion = item['emotion']
+            label_intent = item['goal'] # 这是一个列表，比如 [3, 16]
+            
+            # 组装成一个超级元组
+            # 格式：((特征元组), 情感标签, 意图标签, 样本ID)
+            processed.append(((t, v, a, i, mask), label_emotion, label_intent, item['id']))
+            
+        return processed
+
+    def get_data(self, mode):
+        if mode == "train":
+            return self.train, self.word2id, self.pretrained_emb
+        elif mode == "dev":
+            return self.dev, self.word2id, self.pretrained_emb
+        elif mode == "test":
+            return self.test, self.word2id, self.pretrained_emb
+        else:
+            print("Mode is not set properly (train/dev/test)")
+            exit()
 
 
 class MOSI:
