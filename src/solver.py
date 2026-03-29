@@ -73,6 +73,7 @@ class Solver(object):
 
     @time_desc_decorator('Training Start!')
     def train(self):
+        torch.autograd.set_detect_anomaly(True)
         curr_patience = patience = self.train_config.patience
         num_trials = 1
 
