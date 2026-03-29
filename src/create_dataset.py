@@ -1,12 +1,12 @@
 import sys
-import mmsdk
+# import mmsdk
 import os
 import re
 import pickle
 import numpy as np
 from tqdm import tqdm_notebook
 from collections import defaultdict
-from mmsdk import mmdatasdk as md
+# from mmsdk import mmdatasdk as md
 from subprocess import check_call, CalledProcessError
 
 import torch
