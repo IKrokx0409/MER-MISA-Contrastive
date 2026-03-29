@@ -17,7 +17,7 @@ username = Path.home().name
 project_dir = Path(__file__).resolve().parent.parent
 sdk_dir = project_dir.joinpath('CMU-MultimodalSDK')
 
-data_dir = Path('/kaggle/input/MOSI-dataset')
+data_dir = Path('/kaggle/input/mosi-dataset')
 
 data_dict = {
     'mosi': data_dir.joinpath('MOSI'), 
