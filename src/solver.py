@@ -82,7 +82,8 @@ class Solver(object):
             self.criterion = criterion = nn.CrossEntropyLoss(reduction="mean")
         elif self.train_config.data == "mine":
             self.criterion_emo = nn.CrossEntropyLoss(reduction="mean")   # 情感：单选分类
-            self.criterion_intent = nn.BCEWithLogitsLoss(reduction="mean") # 意图：多标签分类
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.criterion_intent = nn.BCEWithLogitsLoss(reduction="mean", pos_weight=torch.tensor([5.0], device=device)) # 意图：多标签分类
         else: # mosi and mosei are regression datasets
             self.criterion = criterion = nn.MSELoss(reduction="mean")
 
@@ -175,7 +176,7 @@ class Solver(object):
             valid_loss, valid_acc = self.eval(mode="dev")
             
             print(f"Current patience: {curr_patience}, current trial: {num_trials}.")
-            if valid_acc >= best_valid_acc:
+            if valid_acc > best_valid_acc:
                 best_valid_acc = valid_acc
                 print("Found new best model on dev set!")
                 if not os.path.exists('checkpoints'): os.makedirs('checkpoints')
