@@ -118,7 +118,7 @@ class Solver(object):
                     
                     emo_tilde, intent_tilde = self.model(t, v, a, i, mask)
                     
-                    # 计算双重 Loss 并等权相加 (这里可以设超参数调节，暂设 1:1)
+                    # 计算双重 Loss 并等权相加
                     emo_loss = self.criterion_emo(emo_tilde, emo_y)
                     intent_loss = self.criterion_intent(intent_tilde, intent_y)
                     cls_loss = emo_loss + intent_loss
@@ -172,6 +172,7 @@ class Solver(object):
 
             train_losses.append(train_loss)
             print(f"Training loss: {round(np.mean(train_loss), 4)}")
+            valid_loss, valid_acc = self.eval(mode="dev", to_print=True)
 
             valid_loss, valid_acc = self.eval(mode="dev")
             
@@ -311,9 +312,10 @@ class Solver(object):
             intent_macro_f1 = f1_score(intent_true, intent_preds_bin, average='macro')
             
             if to_print:
-                print(f"[{mode.upper()}] 📊 MINE 评估结果:")
-                print(f" -> 情感 Accuracy: {emo_acc:.4f}")
-                print(f" -> 意图 Micro-F1: {intent_micro_f1:.4f} | Macro-F1: {intent_macro_f1:.4f}")
+                print(f"[{mode.upper()}] MINE test results:")
+                print(f" -> Emotion Accuracy: {emo_acc:.4f}")
+                print(f" -> Intent Micro-F1: {intent_micro_f1:.4f}")
+                print(f" -> Intent Macro-F1: {intent_macro_f1:.4f}")
             
             # 返回一个综合分数供 Early Stopping 使用
             return (emo_acc + intent_micro_f1) / 2.0
