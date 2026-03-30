@@ -93,7 +93,8 @@ class Solver(object):
         self.loss_recon = MSE()
         self.loss_cmd = CMD()
         
-        best_valid_loss = float('inf')
+        # best_valid_loss = float('inf')
+        best_valid_acc = 0.0
         lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.5)
         
         train_losses = []
@@ -174,8 +175,8 @@ class Solver(object):
             valid_loss, valid_acc = self.eval(mode="dev")
             
             print(f"Current patience: {curr_patience}, current trial: {num_trials}.")
-            if valid_loss <= best_valid_loss:
-                best_valid_loss = valid_loss
+            if valid_acc >= best_valid_acc:
+                best_valid_acc = valid_acc
                 print("Found new best model on dev set!")
                 if not os.path.exists('checkpoints'): os.makedirs('checkpoints')
                 torch.save(self.model.state_dict(), f'checkpoints/model_{self.train_config.name}.std')
